@@ -4,6 +4,7 @@ from pymavlink import mavutil
 import math, time
 
 CONNECT_STRING = '/dev/ttyACM0'
+CAMERA_ANGLE = math.pi/4 #smallest angle of view
 
 class UAV:
     def __init__(self):
@@ -20,15 +21,31 @@ class UAV:
             time.sleep(1)
 
         # Display basic vehicle state
-        print " Type: %s" % vehicle._vehicle_type
-        print " Armed: %s" % vehicle.armed
-        print " System status: %s" % vehicle.system_status.state
-        print " GPS: %s" % vehicle.gps_0
-        print " Alt: %s" % vehicle.location.global_relative_frame.alt
+        print " Type: %s" % self.vehicle._vehicle_type
+        print " Armed: %s" % self.vehicle.armed
+        print " System status: %s" % self.vehicle.system_status.state
+        print " GPS: %s" % self.vehicle.gps_0
+        print " Alt: %s" % self.vehicle.location.global_relative_frame.alt
 
     @self.vehicle.on_message('HOME_POSITION')
     def hp_listener(self, name, home_position): 
         self.home_position_set = True
+
+    def move2saferegion(self, matrix): #matrix is np.matrix with value 0 or 1
+        alt = self.vehicle.location.global_relative_frame.alt
+        heading = self.vehicle.heading
+        #iteration from top-left corner of the image; needs to be imroved
+        for (x,y), value in np.ndenumerate(matrix):
+            if (x==1 and y==1):
+                pass
+            if value:
+                forward = math.tan(CAMERA_ANGLE) * alt * (1 - x) * 2/3
+                right = math.tan(CAMERA_ANGLE) * alt * (1 - y) * 2/3
+                dNorth = forward * math.cos(heading) + right * math.cos(math.pi/2 + heading)
+                dEast = forward * math.sin(heading) + right * math.sin(math.pi/2 + heading)
+                self.move2wp(dNorth, dEast, 0)
+                return True
+        return False
 
     def move2wp(self, dNorth, dEast, dAlt):
         earth_radius=6378137.0 #Radius of "spherical" earth
